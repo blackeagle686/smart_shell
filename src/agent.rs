@@ -154,7 +154,8 @@ impl Llm {
         .send()
         .await?; 
         if res.status().is_success(){
-            let body: serde_json::Value = res.json().await
+            let body: serde_json::Value = res.json().await?;
+            if let Some(content)
             
         }
     }
