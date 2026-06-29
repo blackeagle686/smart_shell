@@ -152,7 +152,8 @@ impl Llm {
         .header("Content-Type", "application/json")
         .json(&payload)
         .send()
-        .await?
+        .await?; 
+    
         .map_err(|e| AgentError::LlmError(e.to_string()))?;
         String::new()
     }
