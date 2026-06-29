@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use colored::*;
 use crate::agent::{Agent, Llm};
-use crate::tools::Tool;
+use crate::tools::{Tool, ToolTrait};
 use std::env;
 use dotenvy::dotenv;
 
@@ -81,7 +81,35 @@ pub async fn start_interactive() {
                         println!();
                     }
                     
-                    // Here you would prompt the user to execute them via agent.act()
+                    // Execute tasks
+                    for task in tasks {
+                        if task.human_in_loop {
+                            print!("{} Execute '{}'? (y/n): ", "⚠️ ".yellow(), task.command.bright_white());
+                            io::stdout().flush().unwrap_or_default();
+                            
+                            let mut approval = String::new();
+                            if io::stdin().read_line(&mut approval).is_ok() {
+                                if !approval.trim().eq_ignore_ascii_case("y") {
+                                    println!("{}", "Skipped.\n".red());
+                                    continue;
+                                }
+                            }
+                        }
+                        
+                        println!("{} {}", "🚀 Executing:".green(), task.command.bright_white());
+                        if let Some(tool) = agent.tools.iter().find(|t| task.tool_to_use.contains(&t.name) || t.name == "shell") {
+                            let result = tool.execute(&task.command);
+                            if !result.output.trim().is_empty() {
+                                println!("{}\n{}", "Output:".green().bold(), result.output.bright_black());
+                            }
+                            if !result.error.trim().is_empty() {
+                                println!("{}\n{}", "Error:".red().bold(), result.error.red());
+                            }
+                            println!();
+                        } else {
+                            println!("{}", "❌ Error: Required tool not found.".red());
+                        }
+                    }
                 }
             }
             Err(e) => {
