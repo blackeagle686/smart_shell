@@ -1,6 +1,8 @@
 pub mod agent;
+pub mod cli;
 pub mod tools;
 
-fn main() {
-    println!("Hello, world!");
+#[tokio::main]
+async fn main() {
+    cli::start_interactive().await;
 }
