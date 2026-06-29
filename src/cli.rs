@@ -10,7 +10,7 @@ pub async fn start_interactive() {
     let _ = dotenv();
 
     println!("{}", "===============================================".cyan().bold());
-    println!("{}", " 🤖 Welcome to Smart Shell AI Assistant".green().bold());
+    println!("{}", " Welcome to Smart Shell AI Assistant".green().bold());
     println!("{}", " Type your request in plain English.".italic().cyan());
     println!("{}", " Type 'exit' or 'quit' to close.".italic().red());
     println!("{}", "===============================================\n".cyan().bold());
