@@ -21,7 +21,7 @@ pub trait ToolTrait {
 impl ToolTrait for Tool {
     fn execute(&self, command: &str) -> ToolResult {
         // Execute the Linux shell command
-        let result = Command::new("sh")
+        let result = Command::new("bash")
             .arg("-c")
             .arg(command)
             .output();
