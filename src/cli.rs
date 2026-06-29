@@ -39,7 +39,7 @@ pub async fn start_interactive() {
         }
     ];
 
-    let agent = Agent::new(llm, tools, 5);
+    let mut agent = Agent::new(llm, tools, 5);
 
     loop {
         print!("{}", "smart-shell> ".green().bold());
