@@ -9,6 +9,7 @@
 
 use crate::tools::{Tool, ToolResult};
 use reqwest::Client;
+use serde_json::json;
 
 use std::fmt;
 
