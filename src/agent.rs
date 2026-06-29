@@ -155,7 +155,11 @@ impl Llm {
         .await?; 
         if res.status().is_success(){
             let body: serde_json::Value = res.json().await?;
-            if let Some(content)
+            if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
+                let tasks_json: serde_json::Value = serde_json::from_str(content)
+                    .map_err(|e| AgentError::LlmError(e.to_string()))?;
+                
+            }
             
         }
     }
