@@ -18,6 +18,7 @@ pub enum AgentError {
     InvalidInput(String),
     LlmError(String),
     TaskError(String),
+    RateLimitExceeded(String),
 }
 
 impl fmt::Display for AgentError {
@@ -26,6 +27,7 @@ impl fmt::Display for AgentError {
             AgentError::InvalidInput(msg) => write!(f, "Invalid input: {}", msg),
             AgentError::LlmError(msg) => write!(f, "LLM processing error: {}", msg),
             AgentError::TaskError(msg) => write!(f, "Task error: {}", msg),
+            AgentError::RateLimitExceeded(msg) => write!(f, "Rate limit exceeded: {}", msg),
         }
     }
 }
@@ -140,10 +142,10 @@ impl Llm {
         }
     }
 
-    pub async fn generate_tasks(&self, prompt: &str) -> Result<Vec<Task>, AgentError> {
+    pub async fn generate_tasks(&self, messages: &[Message]) -> Result<(Vec<Task>, usize), AgentError> {
         let payload = json!({
             "model": self.model,
-            "messages": [{"role": "user", "content": prompt}], 
+            "messages": messages, 
             "temperature": 0.7, 
             "max_tokens": 2048,
         });
@@ -160,6 +162,8 @@ impl Llm {
             let body: serde_json::Value = res.json().await
                 .map_err(|e| AgentError::LlmError(e.to_string()))?;
                 
+            let tokens = body["usage"]["total_tokens"].as_u64().unwrap_or(0) as usize;
+                
             if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
                 // Extract JSON array from potentially markdown-wrapped response
                 let json_start = content.find('[').unwrap_or(0);
@@ -173,7 +177,7 @@ impl Llm {
 
                 let tasks: Vec<Task> = serde_json::from_str(json_str)
                     .map_err(|e| AgentError::LlmError(format!("Failed to parse tasks JSON: {}\nContent: {}", e, json_str)))?;
-                return Ok(tasks);
+                return Ok((tasks, tokens));
             }
             Err(AgentError::LlmError("No content field in LLM response".to_string()))
         } else {
@@ -193,6 +197,7 @@ impl Llm {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Message {
     pub role: String,
     pub content: String,
@@ -203,6 +208,8 @@ pub struct Agent {
     pub tools: Vec<Tool>,
     pub history: Vec<Message>,
     pub max_iterations: u32,
+    pub total_tokens_used: usize,
+    pub token_limit: usize,
 }
 
 impl Agent {
@@ -212,10 +219,16 @@ impl Agent {
             tools,
             history: Vec::new(),
             max_iterations,
+            total_tokens_used: 0,
+            token_limit: 1_000_000,
         }
     }
     
-    pub async fn think(&self, user_request: &str) -> Result<Vec<Task>, AgentError> {
+    pub async fn think(&mut self, user_request: &str) -> Result<Vec<Task>, AgentError> {
+        if self.total_tokens_used >= self.token_limit {
+            return Err(AgentError::RateLimitExceeded(format!("Token limit of {} reached. Current usage: {}", self.token_limit, self.total_tokens_used)));
+        }
+
         if user_request.trim().is_empty() {
             return Err(AgentError::InvalidInput("User request cannot be empty".to_string()));
         }
@@ -231,10 +244,25 @@ impl Agent {
             \"command\": \"bash command\", \"priority\": 1, \"human_in_loop\": true, \"status\": \"Pending\"}}",
             user_request
         );
-        self.llm.generate_tasks(&prompt).await
+
+        self.history.push(Message { role: "user".to_string(), content: prompt });
+        
+        // Maintain a context window of the last 10 messages
+        if self.history.len() > 10 {
+            let overflow = self.history.len() - 10;
+            self.history.drain(0..overflow);
+        }
+
+        let (tasks, tokens) = self.llm.generate_tasks(&self.history).await?;
+        self.total_tokens_used += tokens;
+        Ok(tasks)
     }
     
-    pub async fn act(&self, user_request: &str, _tasks: Vec<Task>, _tool: &Tool) -> Result<ToolResult, AgentError> {
+    pub async fn act(&mut self, user_request: &str, _tasks: Vec<Task>, _tool: &Tool) -> Result<ToolResult, AgentError> {
+        if self.total_tokens_used >= self.token_limit {
+            return Err(AgentError::RateLimitExceeded(format!("Token limit of {} reached. Current usage: {}", self.token_limit, self.total_tokens_used)));
+        }
+
         if user_request.trim().is_empty() {
             return Err(AgentError::InvalidInput("User request cannot be empty".to_string()));
         }
