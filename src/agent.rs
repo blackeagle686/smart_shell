@@ -142,8 +142,9 @@ impl Llm {
         let payload = json!({
             "model": self.model,
             "messages": Message, 
-            "temprature": 0.7
-        })
+            "temprature": 0.7, 
+            "max_tokens": 2048,
+        });
         String::new()
     }
 
