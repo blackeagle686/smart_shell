@@ -139,7 +139,10 @@ impl Llm {
 
     pub fn generate_tasks(&self, _prompt: &str) -> String {
         // TODO: Implement actual LLM generation
-        let payload = 
+        let payload = json!({
+            "model": self.model,
+            
+        })
         String::new()
     }
 
