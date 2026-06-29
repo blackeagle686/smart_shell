@@ -8,7 +8,7 @@
  */ 
 
 use crate::tools::{Tool, ToolResult};
-use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use std::fmt;
@@ -32,12 +32,14 @@ impl fmt::Display for AgentError {
 
 impl std::error::Error for AgentError {}
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum TaskStatus {
     Pending,
     Completed,
     Failed,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Task {
     pub id: String,
     pub title: String, 
@@ -138,32 +140,47 @@ impl Llm {
         }
     }
 
-    pub fn generate_tasks(&self, _prompt: &str) -> String {
-        // TODO: Implement actual LLM generation
+    pub async fn generate_tasks(&self, prompt: &str) -> Result<Vec<Task>, AgentError> {
         let payload = json!({
             "model": self.model,
-            "messages": Message, 
-            "temprature": 0.7, 
+            "messages": [{"role": "user", "content": prompt}], 
+            "temperature": 0.7, 
             "max_tokens": 2048,
         });
 
-        let res = slef.client.post(self.base_url)
-        .header("Authorization", format!("Bearer {}", self.api_key))
-        .header("Content-Type", "application/json")
-        .json(&payload)
-        .send()
-        .await?; 
-        if res.status().is_success(){
-            let body: serde_json::Value = res.json().await?;
-            if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
-                let tasks_json: serde_json::Value = serde_json::from_str(content)
-                    .map_err(|e| AgentError::LlmError(e.to_string()))?;
-                
-            }
+        let res = self.client.post(&self.base_url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| AgentError::LlmError(e.to_string()))?; 
             
+        if res.status().is_success() {
+            let body: serde_json::Value = res.json().await
+                .map_err(|e| AgentError::LlmError(e.to_string()))?;
+                
+            if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
+                let tasks: Vec<Task> = serde_json::from_str(content)
+                    .map_err(|e| AgentError::LlmError(format!("Failed to parse tasks JSON: {}", e)))?;
+                return Ok(tasks);
+            }
+            Err(AgentError::LlmError("No content field in LLM response".to_string()))
+        } else {
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            Err(AgentError::LlmError(format!("Request failed {}: {}", status, text)))
         }
     }
 
+    pub async fn generate_action(&self, _prompt: &str) -> Result<ToolResult, AgentError> {
+        // TODO: Implement actual LLM action generation
+        Ok(ToolResult {
+            status: "0".to_string(),
+            output: String::new(),
+            error: String::new(),
+        })
+    }
 }
 
 pub struct Message {
@@ -188,7 +205,7 @@ impl Agent {
         }
     }
     
-    pub fn think(&self, user_request: &str) -> Result<Vec<Task>, AgentError> {
+    pub async fn think(&self, user_request: &str) -> Result<Vec<Task>, AgentError> {
         if user_request.trim().is_empty() {
             return Err(AgentError::InvalidInput("User request cannot be empty".to_string()));
         }
@@ -197,10 +214,10 @@ impl Agent {
             "You are a helpful assistant.\nUser request: {}\n\nThink about what needs to be done.",
             user_request
         );
-        self.llm.generate_tasks(&prompt)
+        self.llm.generate_tasks(&prompt).await
     }
     
-    pub fn act(&self, user_request: &str, _tasks: Vec<Task>, _tool: &Tool) -> Result<ToolResult, AgentError> {
+    pub async fn act(&self, user_request: &str, _tasks: Vec<Task>, _tool: &Tool) -> Result<ToolResult, AgentError> {
         if user_request.trim().is_empty() {
             return Err(AgentError::InvalidInput("User request cannot be empty".to_string()));
         }
@@ -209,6 +226,6 @@ impl Agent {
             "You are a helpful assistant.\nUser request: {}\n\nThink about what needs to be done.",
             user_request
         );
-        self.llm.generate_action(&prompt)
+        self.llm.generate_action(&prompt).await
     }
 }
