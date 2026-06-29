@@ -147,7 +147,7 @@ impl Llm {
             "max_tokens": 2048,
         });
 
-        let res = slef.client
+        let res = slef.client.post(self.base_url)
         String::new()
     }
 
