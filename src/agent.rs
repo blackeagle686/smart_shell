@@ -161,8 +161,18 @@ impl Llm {
                 .map_err(|e| AgentError::LlmError(e.to_string()))?;
                 
             if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
-                let tasks: Vec<Task> = serde_json::from_str(content)
-                    .map_err(|e| AgentError::LlmError(format!("Failed to parse tasks JSON: {}", e)))?;
+                // Extract JSON array from potentially markdown-wrapped response
+                let json_start = content.find('[').unwrap_or(0);
+                let json_end = content.rfind(']').map(|i| i + 1).unwrap_or(content.len());
+                
+                let json_str = if json_start < json_end {
+                    &content[json_start..json_end]
+                } else {
+                    content
+                };
+
+                let tasks: Vec<Task> = serde_json::from_str(json_str)
+                    .map_err(|e| AgentError::LlmError(format!("Failed to parse tasks JSON: {}\nContent: {}", e, json_str)))?;
                 return Ok(tasks);
             }
             Err(AgentError::LlmError("No content field in LLM response".to_string()))
@@ -211,7 +221,14 @@ impl Agent {
         }
         
         let prompt = format!(
-            "You are a helpful assistant.\nUser request: {}\n\nThink about what needs to be done.",
+            "You are an AI assistant controlling a Linux shell. \
+            User request: {}\n\n\
+            Analyze the request and return a JSON array of tasks to execute. \
+            You MUST return ONLY a valid JSON array of Task objects. \
+            Do not include any markdown formatting, backticks, or explanations. \
+            Task object format:\n\
+            {{\"id\": \"string\", \"title\": \"string\", \"description\": \"string\", \"tool_to_use\": [\"shell\"], \
+            \"command\": \"bash command\", \"priority\": 1, \"human_in_loop\": true, \"status\": \"Pending\"}}",
             user_request
         );
         self.llm.generate_tasks(&prompt).await
