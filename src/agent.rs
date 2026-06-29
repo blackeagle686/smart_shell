@@ -9,6 +9,7 @@
 
 use crate::tools::{Tool, ToolResult};
 use reqwest::Client;
+
 use std::fmt;
 
 #[derive(Debug)]
