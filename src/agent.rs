@@ -148,6 +148,11 @@ impl Llm {
         });
 
         let res = slef.client.post(self.base_url)
+        .header("Authorization", self.api_key)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| AgentError::LlmError(e.to_string()))?;
         String::new()
     }
 
