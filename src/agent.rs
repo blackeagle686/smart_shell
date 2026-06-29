@@ -137,7 +137,7 @@ impl Llm {
         }
     }
 
-    pub fn generate_tasks(&self, _prompt: &str) ->  {
+    pub fn generate_tasks(&self, _prompt: &str) -> Option<> {
         // TODO: Implement actual LLM generation
         Ok(Vec::new())
     }
