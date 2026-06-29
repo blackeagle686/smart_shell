@@ -137,7 +137,7 @@ impl Llm {
         }
     }
 
-    pub fn generate_tasks(&self, _prompt: &str) -> Result<Vec<Task>, AgentError> {
+    pub fn generate_tasks(&self, _prompt: &str) ->  {
         // TODO: Implement actual LLM generation
         Ok(Vec::new())
     }
