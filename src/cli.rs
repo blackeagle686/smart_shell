@@ -62,6 +62,30 @@ pub async fn start_interactive() {
             continue;
         }
 
+        // Direct command execution bypass
+        if input.starts_with('!') {
+            let cmd = input[1..].trim();
+            if cmd.is_empty() {
+                println!("{}", "❌ Error: No command provided after '!'.".red());
+                continue;
+            }
+            
+            println!("{} {}", "⚡ Direct Execution:".yellow().bold(), cmd.white());
+            if let Some(tool) = agent.tools.iter().find(|t| t.name == "shell") {
+                let result = tool.execute(cmd);
+                if !result.output.trim().is_empty() {
+                    println!("{}\n{}", "Output:".green().bold(), result.output.bright_black());
+                }
+                if !result.error.trim().is_empty() {
+                    println!("{}\n{}", "Error:".red().bold(), result.error.red());
+                }
+                println!();
+            } else {
+                println!("{}", "❌ Error: Shell tool not found.".red());
+            }
+            continue;
+        }
+
         println!("{} {}", "🧠 Thinking about:".cyan(), input.white());
         
         match agent.think(input).await {
