@@ -153,9 +153,7 @@ impl Llm {
         .json(&payload)
         .send()
         .await?; 
-    
-        .map_err(|e| AgentError::LlmError(e.to_string()))?;
-        String::new()
+        if res
     }
 
 }
