@@ -6,8 +6,15 @@ use std::env;
 use dotenvy::dotenv;
 
 pub async fn start_interactive() {
-    // Attempt to load .env file, ignore if not present
+    // Attempt to load local .env file
     let _ = dotenv();
+    
+    // Attempt to load global .env file as fallback
+    if let Some(mut path) = dirs::config_dir() {
+        path.push("smartsh");
+        path.push(".env");
+        let _ = dotenvy::from_path(path);
+    }
 
     println!("{}", "===============================================".cyan().bold());
     println!("{}", " Welcome to Smart Shell AI Assistant".green().bold());
