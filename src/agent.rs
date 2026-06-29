@@ -148,7 +148,7 @@ impl Llm {
         });
 
         let res = slef.client.post(self.base_url)
-        .header("Authorization", self.api_key)
+        .header("Authorization", )
         .json(&payload)
         .send()
         .await?
