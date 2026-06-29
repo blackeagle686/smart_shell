@@ -121,7 +121,6 @@ impl Task {
 
 pub struct Llm {
     // Placeholder fields for LLM
-    client: reqwest::Client,
     base_url: String,
     model: String,
     api_key: String,
