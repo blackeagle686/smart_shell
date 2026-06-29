@@ -153,7 +153,9 @@ impl Llm {
         .json(&payload)
         .send()
         .await?; 
-        if res
+        if res.status().is_success(){
+            
+        }
     }
 
 }
