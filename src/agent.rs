@@ -151,7 +151,7 @@ impl Llm {
         .header("Authorization", self.api_key)
         .json(&payload)
         .send()
-        // .await
+        .await?
         .map_err(|e| AgentError::LlmError(e.to_string()))?;
         String::new()
     }
