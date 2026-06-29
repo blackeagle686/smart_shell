@@ -141,7 +141,8 @@ impl Llm {
         // TODO: Implement actual LLM generation
         let payload = json!({
             "model": self.model,
-            "messages": Message
+            "messages": Message, 
+            "temprature": 0.7
         })
         String::new()
     }
