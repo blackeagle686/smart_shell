@@ -154,7 +154,7 @@ impl Llm {
         .send()
         .await?; 
         if res.status().is_success(){
-            let body: serde_json::Value = res.json().await.map_err(|e| AgentError::LlmError(e.to_string()))?;
+            let body: serde_json::Value = res.json().await
             
         }
     }
