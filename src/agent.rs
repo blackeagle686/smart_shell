@@ -137,12 +137,12 @@ impl Llm {
         }
     }
 
-    pub fn generate_tasks(&self, _prompt: &str) -> Option<> {
+    pub fn generate_tasks(&self, _prompt: &str) -> String {
         // TODO: Implement actual LLM generation
-        Ok(Vec::new())
+        String::new()
     }
 
-    pub fn generate_action(&self, _prompt: &str) -> Result<ToolResult, AgentError> {
+    pub fn generate_action(&self, _prompt: &str) -> String {
         // TODO: Implement actual LLM action generation
         Ok(ToolResult {
             status: "0".to_string(),
