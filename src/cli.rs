@@ -93,14 +93,14 @@ pub async fn start_interactive() {
             continue;
         }
 
-        println!("{} {}", "🧠 Thinking about:".cyan(), input.white());
+        println!("{} {}", "✨ Thinking about:".cyan(), input.white());
         
         match agent.think(input).await {
             Ok(tasks) => {
                 if tasks.is_empty() {
                     println!("{}", "No tasks generated for this request.".yellow());
                 } else {
-                    println!("{}", "📝 Tasks Planned:".magenta().bold());
+                    println!("{}", "✨ Tasks Planned:".magenta().bold());
                     for (i, task) in tasks.iter().enumerate() {
                         println!("  {}. {}", i + 1, task.title.white().bold());
                         println!("     {} {}", "Description:".bright_black(), task.description.bright_black());
@@ -127,16 +127,36 @@ pub async fn start_interactive() {
                             }
                         }
                         
-                        println!("{} {}", "🚀 Executing:".green(), task.command.bright_white());
+                        println!("{} {}", "✨ Executing:".green(), task.command.bright_white());
                         if let Some(tool) = agent.tools.iter().find(|t| task.tool_to_use.contains(&t.name) || t.name == "shell") {
                             let result = tool.execute(&task.command);
+                            
+                            // Print raw output concisely
                             if !result.output.trim().is_empty() {
-                                println!("{}\n{}", "Output:".green().bold(), result.output.bright_black());
+                                println!("{}\n{}", "RAW Output:".bright_black(), result.output.bright_black());
                             }
                             if !result.error.trim().is_empty() {
                                 println!("{}\n{}", "Error:".red().bold(), result.error.red());
                             }
-                            println!();
+                            
+                            // Generate and print beautiful agent summary
+                            let output_to_summarize = if !result.error.trim().is_empty() { &result.error } else { &result.output };
+                            if !output_to_summarize.trim().is_empty() {
+                                println!("{}", "✨ Agent is analyzing results...".cyan());
+                                match agent.summarize_output(&task.command, output_to_summarize).await {
+                                    Ok(summary) => {
+                                        println!("\n{}", " ╭──  Agent Insight ───".blue().bold());
+                                        let lines: Vec<&str> = summary.split('\n').collect();
+                                        for line in lines {
+                                            println!(" {} {}", "│".blue().bold(), line.bright_cyan());
+                                        }
+                                        println!("{}", " ╰───────────────────────\n".blue().bold());
+                                    }
+                                    Err(e) => {
+                                        println!("{} {}", "❌ Summary Error:".red(), e);
+                                    }
+                                }
+                            }
                         } else {
                             println!("{}", "❌ Error: Required tool not found.".red());
                         }

@@ -165,19 +165,37 @@ impl Llm {
             let tokens = body["usage"]["total_tokens"].as_u64().unwrap_or(0) as usize;
                 
             if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
-                // Extract JSON array from potentially markdown-wrapped response
-                let json_start = content.find('[').unwrap_or(0);
-                let json_end = content.rfind(']').map(|i| i + 1).unwrap_or(content.len());
+                // Parse lightweight format
+                let mut cmd = String::new();
+                let mut hil = true;
                 
-                let json_str = if json_start < json_end {
-                    &content[json_start..json_end]
-                } else {
-                    content
-                };
+                for line in content.lines() {
+                    let line = line.trim();
+                    if line.starts_with("CMD:") {
+                        cmd = line.strip_prefix("CMD:").unwrap().trim().to_string();
+                    } else if line.starts_with("HIL:") {
+                        let val = line.strip_prefix("HIL:").unwrap().trim();
+                        hil = val.eq_ignore_ascii_case("true");
+                    }
+                }
+                
+                if cmd.is_empty() {
+                    // Fallback if the model just outputted raw text
+                    cmd = content.replace('`', "").trim().to_string();
+                }
 
-                let tasks: Vec<Task> = serde_json::from_str(json_str)
-                    .map_err(|e| AgentError::LlmError(format!("Failed to parse tasks JSON: {}\nContent: {}", e, json_str)))?;
-                return Ok((tasks, tokens));
+                let task = Task {
+                    id: "1".to_string(),
+                    title: "Generated Command".to_string(),
+                    description: "Direct command execution".to_string(),
+                    tool_to_use: vec!["shell".to_string()],
+                    command: cmd,
+                    priority: 1,
+                    human_in_loop: hil,
+                    status: TaskStatus::Pending,
+                };
+                
+                return Ok((vec![task], tokens));
             }
             Err(AgentError::LlmError("No content field in LLM response".to_string()))
         } else {
@@ -194,6 +212,42 @@ impl Llm {
             output: String::new(),
             error: String::new(),
         })
+    }
+
+    pub async fn generate_summary(&self, prompt: &str) -> Result<(String, usize), AgentError> {
+        let payload = json!({
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": "You are a concise AI. Summarize or format the shell output beautifully in max 3 sentences to save tokens."},
+                {"role": "user", "content": prompt}
+            ], 
+            "temperature": 0.3, 
+            "max_tokens": 150,
+        });
+
+        let res = self.client.post(&self.base_url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| AgentError::LlmError(e.to_string()))?; 
+            
+        if res.status().is_success() {
+            let body: serde_json::Value = res.json().await
+                .map_err(|e| AgentError::LlmError(e.to_string()))?;
+                
+            let tokens = body["usage"]["total_tokens"].as_u64().unwrap_or(0) as usize;
+                
+            if let Some(content) = body["choices"][0]["message"]["content"].as_str() {
+                return Ok((content.to_string(), tokens));
+            }
+            Err(AgentError::LlmError("No content field in LLM response".to_string()))
+        } else {
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            Err(AgentError::LlmError(format!("Request failed {}: {}", status, text)))
+        }
     }
 }
 
@@ -234,14 +288,11 @@ impl Agent {
         }
         
         let prompt = format!(
-            "You are an AI assistant controlling a Linux shell. \
-            User request: {}\n\n\
-            Analyze the request and return a JSON array of tasks to execute. \
-            You MUST return ONLY a valid JSON array of Task objects. \
-            Do not include any markdown formatting, backticks, or explanations. \
-            Task object format:\n\
-            {{\"id\": \"string\", \"title\": \"string\", \"description\": \"string\", \"tool_to_use\": [\"shell\"], \
-            \"command\": \"bash command\", \"priority\": 1, \"human_in_loop\": true, \"status\": \"Pending\"}}",
+            "You are a fast Linux shell AI. User request: {}\n\n\
+            Return exactly ONE bash command to satisfy this request.\n\
+            Format your response EXACTLY like this, with NO markdown and NO explanations:\n\
+            CMD: <bash command here>\n\
+            HIL: <true if dangerous/destructive, false if safe info retrieval>",
             user_request
         );
 
@@ -272,5 +323,39 @@ impl Agent {
             user_request
         );
         self.llm.generate_action(&prompt).await
+    }
+
+    pub async fn summarize_output(&mut self, command: &str, output: &str) -> Result<String, AgentError> {
+        if self.total_tokens_used >= self.token_limit {
+            return Err(AgentError::RateLimitExceeded(format!("Token limit of {} reached. Current usage: {}", self.token_limit, self.total_tokens_used)));
+        }
+
+        // Truncate output to save tokens safely at char boundaries
+        let truncated = if output.len() > 600 {
+            let mut end = 600;
+            while end > 0 && !output.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{}...\n[TRUNCATED to save tokens]", &output[..end])
+        } else {
+            output.to_string()
+        };
+
+        let prompt = format!(
+            "Command executed: `{}`\nOutput:\n{}\n\nProvide a very short, beautifully formatted summary of this output.",
+            command, truncated
+        );
+
+        let (summary, tokens) = self.llm.generate_summary(&prompt).await?;
+        self.total_tokens_used += tokens;
+        
+        // Also keep a record of the AI's summary in the history context window if we want
+        self.history.push(Message { role: "assistant".to_string(), content: summary.clone() });
+        if self.history.len() > 10 {
+            let overflow = self.history.len() - 10;
+            self.history.drain(0..overflow);
+        }
+        
+        Ok(summary)
     }
 }
