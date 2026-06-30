@@ -184,6 +184,20 @@ impl Llm {
                     cmd = content.replace('`', "").trim().to_string();
                 }
 
+                // CRITICAL SECURITY LAYER: Never trust small models with HIL classification!
+                // Force HIL to true if any dangerous command patterns are detected.
+                let dangerous = ["rm", "mv", "cp", "wget", "curl", "chmod", "chown", "systemctl", "kill", "pkill", "reboot", "shutdown", ">", ">>", "dd", "mkfs", "sudo"];
+                
+                // We do a simple check. False positives (asking for permission unnecessarily) are fine.
+                // False negatives (deleting files silently) are unacceptable.
+                for keyword in dangerous.iter() {
+                    // Check if command contains the keyword as a standalone word (roughly)
+                    if cmd.contains(keyword) {
+                        hil = true;
+                        break;
+                    }
+                }
+
                 let task = Task {
                     id: "1".to_string(),
                     title: "Generated Command".to_string(),
@@ -298,9 +312,9 @@ impl Agent {
             - MUST be true ONLY for destructive/write operations (like rm, mv, cp, mkdir, touch, systemctl, chmod).\n\n\
             CRITICAL: DO NOT explain the command. DO NOT write conversational text. Output ONLY the CMD and HIL lines.\n\n\
             Example:\n\
-            User request: delete the build folder\n\
-            CMD: rm -rf build\n\
-            HIL: true",
+            User request: show network info\n\
+            CMD: ip addr show\n\
+            HIL: false",
             user_request
         );
 
