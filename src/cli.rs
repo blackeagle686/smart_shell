@@ -31,8 +31,8 @@ pub async fn start_interactive() {
         }
     };
 
-    let base_url = env::var("BASE_URL").unwrap_or_else(|_| "https://api.longcat.chat/openai/chat/completions".to_string());
-    let model = env::var("MODEL").unwrap_or_else(|_| "LongCat-2.0-Preview".to_string());
+    let base_url = env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:11434/v1/chat/completions".to_string());
+    let model = env::var("MODEL").unwrap_or_else(|_| "qwen2.5-coder:1.5b".to_string());
 
     let llm = Llm::new(base_url, model, api_key);
     

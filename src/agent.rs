@@ -292,15 +292,24 @@ impl Agent {
             Return exactly ONE bash command to satisfy this request.\n\
             Format your response EXACTLY like this, with NO markdown and NO explanations:\n\
             CMD: <bash command here>\n\
-            HIL: <true if dangerous/destructive, false if safe info retrieval>",
+            HIL: <true/false>\n\n\
+            RULES FOR HIL:\n\
+            - MUST be false for ALL safe/read operations (like ls, cat, echo, pwd, uname, free, df, grep, find).\n\
+            - MUST be true ONLY for destructive/write operations (like rm, mv, cp, mkdir, touch, systemctl, chmod).\n\n\
+            CRITICAL: DO NOT explain the command. DO NOT write conversational text. Output ONLY the CMD and HIL lines.\n\n\
+            Example:\n\
+            User request: delete the build folder\n\
+            CMD: rm -rf build\n\
+            HIL: true",
             user_request
         );
 
         self.history.push(Message { role: "user".to_string(), content: prompt });
         
-        // Maintain a context window of the last 10 messages
-        if self.history.len() > 10 {
-            let overflow = self.history.len() - 10;
+        // Maintain a tiny context window (max 3) to guarantee ultra-fast CPU inference
+        // High context size causes slow Prompt Evaluation (Prefill) on CPUs
+        if self.history.len() > 3 {
+            let overflow = self.history.len() - 3;
             self.history.drain(0..overflow);
         }
 
